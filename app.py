@@ -8,8 +8,8 @@ st.set_page_config(page_title="我的AI文档助手", page_icon="📚")
 st.title("📚 我的AI文档助手")
 
 # ================= 配置你的两把钥匙 =================
-DEEPSEEK_KEY = "sk-2180263b7dd645b6bc38309f227728e5" 
-SILICONFLOW_KEY = "sk-srmajmaoglnujsaboigwhsyaphvnusakopxsaakigceqican"
+DEEPSEEK_KEY = "sk-" 
+SILICONFLOW_KEY = "sk-"
 # ===================================================
 
 # 初始化客户端
