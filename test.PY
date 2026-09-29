@@ -3,8 +3,8 @@ from pypdf import PdfReader
 import chromadb
 
 # ================= 配置你的两把钥匙 =================
-DEEPSEEK_KEY = "sk-2180263b7dd645b6bc38309f227728e5"
-SILICONFLOW_KEY = "sk-srmajmaoglnujsaboigwhsyaphvnusakopxsaakigceqican"
+DEEPSEEK_KEY = ""
+SILICONFLOW_KEY = "sk-"
 # ===================================================
 
 # 1. 初始化向量数据库（本地文件夹，存了以后就不用重复计算了）
