@@ -28,11 +28,11 @@ with st.sidebar:
     if uploaded_file is not None:
         if st.button("处理这份新文档"):
             # 保存上传的文件
-            with open("temp.pdf", "wb") as f:
+            with open("test.pdf", "wb") as f:
                 f.write(uploaded_file.getbuffer())
             
             # 读取并切块
-            reader = PdfReader("temp.pdf")
+            reader = PdfReader("test.pdf")
             full_text = ""
             for page in reader.pages:
                 text = page.extract_text()
