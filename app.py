@@ -8,8 +8,8 @@ st.set_page_config(page_title="我的AI文档助手", page_icon="📚")
 st.title("📚 我的AI文档助手")
 
 # ================= 配置你的两把钥匙 =================
-DEEPSEEK_KEY = "sk-" 
-SILICONFLOW_KEY = "sk-"
+DEEPSEEK_KEY = "sk5" 
+SILICONFLOW_KEY = "sk-s"
 # ===================================================
 
 # 初始化客户端
@@ -23,34 +23,50 @@ collection = chroma_client.get_or_create_collection(name="pdf_knowledge")
 # 侧边栏：上传PDF
 with st.sidebar:
     st.header("上传文档")
-    uploaded_file = st.file_uploader("请选择PDF文件", type="pdf")
-    
+    uploaded_file = st.file_uploader("请选择PDF或TXT文件", type=["pdf", "txt"])
+
     if uploaded_file is not None:
         if st.button("处理这份新文档"):
             # 保存上传的文件
-            with open("test.pdf", "wb") as f:
+            file_path = "uploaded_file.tmp"
+            with open(file_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
-            
+
             # 读取并切块
-            reader = PdfReader("test.pdf")
-            full_text = ""
-            for page in reader.pages:
-                text = page.extract_text()
-                if text: full_text += text
-            
-            chunks = [full_text[i:i+500] for i in range(0, len(full_text), 500)]
-            
-            # 清空旧数据，存入新数据
-            chroma_client.delete_collection("pdf_knowledge")
-            collection = chroma_client.get_or_create_collection(name="pdf_knowledge")
-            
-            st.write(f"正在处理文档，共 {len(chunks)} 块...")
-            for i in range(0, len(chunks), 10):
-                batch = chunks[i:i+10]
-                emb_list = sf_client.embeddings.create(model="BAAI/bge-m3", input=batch).data
-                for j, emb_data in enumerate(emb_list):
-                    collection.add(ids=[f"id_{i+j}"], embeddings=[emb_data.embedding], documents=[batch[j]])
-            st.success("文档处理完成！可以开始提问了。")
+            if uploaded_file.name.lower().endswith(".pdf"):
+                try:
+                    reader = PdfReader(file_path)
+                    full_text = ""
+                    for page in reader.pages:
+                        text = page.extract_text()
+                        print("我正在读第",page,"页")
+                        if text:
+                            full_text += text
+                except Exception as e:
+                    st.error(f"读取 PDF 失败: {e}")
+                    full_text = ""
+            else:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    full_text = f.read()
+
+            if full_text:
+                chunks = [full_text[i:i+500] for i in range(0, len(full_text), 500)]
+
+                try:
+                    chroma_client.delete_collection("pdf_knowledge")
+                except Exception:
+                    pass
+                collection = chroma_client.get_or_create_collection(name="pdf_knowledge")
+
+                st.write(f"正在处理文档，共 {len(chunks)} 块...")
+                for i in range(0, len(chunks), 10):
+                    batch = chunks[i:i+10]
+                    emb_list = sf_client.embeddings.create(model="BAAI/bge-m3", input=batch).data
+                    for j, emb_data in enumerate(emb_list):
+                        collection.add(ids=[f"id_{i+j}"], embeddings=[emb_data.embedding], documents=[batch[j]])
+                st.success("文档处理完成！可以开始提问了。")
+            else:
+                st.warning("没有读取到有效文本，请检查文件内容。")
 
 # 主界面：聊天窗口
 if "messages" not in st.session_state:
