@@ -1,15 +1,15 @@
-import streamlit as st
+import streamlit as st#python前端书写工具
 from openai import OpenAI
 from pypdf import PdfReader
-import chromadb
+import chromadb#导入一个向量数据库的包
 
 # 页面设置
 st.set_page_config(page_title="我的AI文档助手", page_icon="📚")
 st.title("📚 我的AI文档助手")
 
 # ================= 配置你的两把钥匙 =================
-DEEPSEEK_KEY = "sk5" 
-SILICONFLOW_KEY = "sk-s"
+DEEPSEEK_KEY = "sk-" 
+SILICONFLOW_KEY = ""
 # ===================================================
 
 # 初始化客户端
@@ -33,10 +33,12 @@ with st.sidebar:
                 f.write(uploaded_file.getbuffer())
 
             # 读取并切块
+            #判断是否为pdf文件，如果是就用pypdf读取，否则就用普通的文本读取
             if uploaded_file.name.lower().endswith(".pdf"):
                 try:
                     reader = PdfReader(file_path)
                     full_text = ""
+                    #循环的读取每一页的内容
                     for page in reader.pages:
                         text = page.extract_text()
                         print("我正在读第",page,"页")
@@ -48,7 +50,7 @@ with st.sidebar:
             else:
                 with open(file_path, "r", encoding="utf-8") as f:
                     full_text = f.read()
-
+                #将数据也就是读取的文字按500字切块，存入向量数据库
             if full_text:
                 chunks = [full_text[i:i+500] for i in range(0, len(full_text), 500)]
 
@@ -57,10 +59,11 @@ with st.sidebar:
                 except Exception:
                     pass
                 collection = chroma_client.get_or_create_collection(name="pdf_knowledge")
-
+#讲切块后的数据分批存入向量数据
                 st.write(f"正在处理文档，共 {len(chunks)} 块...")
                 for i in range(0, len(chunks), 10):
                     batch = chunks[i:i+10]
+                    #生成一个数字指纹导入到emb-list中
                     emb_list = sf_client.embeddings.create(model="BAAI/bge-m3", input=batch).data
                     for j, emb_data in enumerate(emb_list):
                         collection.add(ids=[f"id_{i+j}"], embeddings=[emb_data.embedding], documents=[batch[j]])
