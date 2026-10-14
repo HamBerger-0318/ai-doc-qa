@@ -1,4 +1,5 @@
 import streamlit as st#python前端书写工具
+import os
 from openai import OpenAI
 from pypdf import PdfReader
 import chromadb#导入一个向量数据库的包
@@ -8,8 +9,8 @@ st.set_page_config(page_title="我的AI文档助手", page_icon="📚")
 st.title("📚 我的AI文档助手")
 
 # ================= 配置你的两把钥匙 =================
-DEEPSEEK_KEY = "sk-" 
-SILICONFLOW_KEY = ""
+DEEPSEEK_KEY = os.getenv("DEEPSEEK_KEY")  # 从环境变量中获取DeepSeek API Key
+SILICONFLOW_KEY = os.getenv("SILICONFLOW_KEY")  # 从环境变量中获取SiliconFlow API Key
 # ===================================================
 
 # 初始化客户端
