@@ -3,7 +3,7 @@ import os
 from openai import OpenAI
 from pypdf import PdfReader
 import chromadb#导入一个向量数据库的包
-
+from my_tools import read_file#导入自定义的读取文件的函数
 # 页面设置
 st.set_page_config(page_title="我的AI文档助手", page_icon="📚")
 st.title("📚 我的AI文档助手")
@@ -28,29 +28,14 @@ with st.sidebar:
 
     if uploaded_file is not None:
         if st.button("处理这份新文档"):
+            ext=os.path.splitext(uploaded_file.name)[1]
             # 保存上传的文件
-            file_path = "uploaded_file.tmp"
+            file_path = f"uploaded_file{ext}"
             with open(file_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
 
             # 读取并切块
-            #判断是否为pdf文件，如果是就用pypdf读取，否则就用普通的文本读取
-            if uploaded_file.name.lower().endswith(".pdf"):
-                try:
-                    reader = PdfReader(file_path)
-                    full_text = ""
-                    #循环的读取每一页的内容
-                    for page in reader.pages:
-                        text = page.extract_text()
-                        print("我正在读第",page,"页")
-                        if text:
-                            full_text += text
-                except Exception as e:
-                    st.error(f"读取 PDF 失败: {e}")
-                    full_text = ""
-            else:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    full_text = f.read()
+            full_text = read_file(file_path)
                 #将数据也就是读取的文字按500字切块，存入向量数据库
             if full_text:
                 chunks = [full_text[i:i+500] for i in range(0, len(full_text), 500)]
