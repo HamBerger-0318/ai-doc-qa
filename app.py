@@ -24,39 +24,38 @@ collection = chroma_client.get_or_create_collection(name="pdf_knowledge")
 # 侧边栏：上传PDF
 with st.sidebar:
     st.header("上传文档")
-    uploaded_file = st.file_uploader("请选择PDF或TXT文件", type=["pdf", "txt"])
-
-    if uploaded_file is not None:
+    uploaded_files = st.file_uploader("请选择PDF或TXT文件", type=["pdf", "txt"], accept_multiple_files=True)
+    if uploaded_files:
         if st.button("处理这份新文档"):
-            ext=os.path.splitext(uploaded_file.name)[1]
-            # 保存上传的文件
-            file_path = f"uploaded_file{ext}"
-            with open(file_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
-
+            full_text = ""
+            try:
+                chroma_client.delete_collection("pdf_knowledge")
+            except Exception:
+                pass
+            collection = chroma_client.get_or_create_collection(name="pdf_knowledge")
+            for file in uploaded_files:
+                ext=os.path.splitext(file.name)[1]
+                # 保存上传的文件    
+                file_path = f"uploaded_file{ext}"
+                with open(file_path, "wb") as f:  
+                    f.write(file.getbuffer())
+                file_text = read_file(file_path)    
             # 读取并切块
-            full_text = read_file(file_path)
+           
+                if file_text:
+                     full_text += file_text+"\n\n---\n\n"  # 添加分隔符，便于后续处理
                 #将数据也就是读取的文字按500字切块，存入向量数据库
             if full_text:
                 chunks = [full_text[i:i+500] for i in range(0, len(full_text), 500)]
-
-                try:
-                    chroma_client.delete_collection("pdf_knowledge")
-                except Exception:
-                    pass
-                collection = chroma_client.get_or_create_collection(name="pdf_knowledge")
-#讲切块后的数据分批存入向量数据
                 st.write(f"正在处理文档，共 {len(chunks)} 块...")
                 for i in range(0, len(chunks), 10):
                     batch = chunks[i:i+10]
-                    #生成一个数字指纹导入到emb-list中
                     emb_list = sf_client.embeddings.create(model="BAAI/bge-m3", input=batch).data
-                    for j, emb_data in enumerate(emb_list):
-                        collection.add(ids=[f"id_{i+j}"], embeddings=[emb_data.embedding], documents=[batch[j]])
-                st.success("文档处理完成！可以开始提问了。")
+                    for j,emb_data in enumerate(emb_list):
+                        collection.add(ids=[f"chunk_{i+j}"], embeddings=[emb_data.embedding], documents=[batch[j]])
+                st.success(f"处理完成！共合并 {len(chunks)} 个文件，切成了 {len(chunks)} 块。")
             else:
-                st.warning("没有读取到有效文本，请检查文件内容。")
-
+                st.error("读取文件失败，请检查文件格式或内容。")
 # 主界面：聊天窗口
 if "messages" not in st.session_state:
     st.session_state.messages = []
