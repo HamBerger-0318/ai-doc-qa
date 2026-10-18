@@ -24,7 +24,11 @@ collection = chroma_client.get_or_create_collection(name="pdf_knowledge")
 # 侧边栏：上传PDF
 with st.sidebar:
     st.header("上传文档")
-    uploaded_files = st.file_uploader("请选择PDF或TXT文件", type=["pdf", "txt"], accept_multiple_files=True)
+    st.divider()#加一条分割线
+    if st.button("清空聊天记录"):
+        st.session_state.messages = []
+        st.rerun()#意思是立即刷新页面，重新运行脚本
+    uploaded_files = st.file_uploader("请选择PDF或TXT文件", type=["pdf", "txt"], accept_multiple_files=True)#允许上传多个文件
     if uploaded_files:
         if st.button("处理这份新文档"):
             full_text = ""
@@ -33,7 +37,7 @@ with st.sidebar:
             except Exception:
                 pass
             collection = chroma_client.get_or_create_collection(name="pdf_knowledge")
-            for file in uploaded_files:
+            for file in uploaded_files:#挨个处理每个上传的文件
                 ext=os.path.splitext(file.name)[1]
                 # 保存上传的文件    
                 file_path = f"uploaded_file{ext}"
@@ -43,9 +47,10 @@ with st.sidebar:
             # 读取并切块
            
                 if file_text:
-                     full_text += file_text+"\n\n---\n\n"  # 添加分隔符，便于后续处理
-                #将数据也就是读取的文字按500字切块，存入向量数据库
-            if full_text:
+                     full_text += file_text+"\n\n---\n\n"  # 把新文件添加到总体文件中，添加分隔符，便于后续处理 将数据也就是读取的文字按500字切块，存入向量数据库
+                     os.remove(file_path)  # 删除临时保存的文件
+            if full_text:#所有文件读取成功后，才进行切块和存入向量数据库
+                st.write(f"当前总字数，共 {len(full_text)} 字。")
                 chunks = [full_text[i:i+500] for i in range(0, len(full_text), 500)]
                 st.write(f"正在处理文档，共 {len(chunks)} 块...")
                 for i in range(0, len(chunks), 10):
