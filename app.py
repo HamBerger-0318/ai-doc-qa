@@ -24,11 +24,15 @@ collection = chroma_client.get_or_create_collection(name="pdf_knowledge")
 # 侧边栏：上传PDF
 with st.sidebar:
     st.header("上传文档")
+    #1滑块组件
+    chunk_size =st.slider("选择文本切块大小", min_value=100, max_value=1000, value=500, step=50)
+    #2多文件上传组件
+    uploaded_files =st.file_uploader("请选择PDF或TXT文件", type=["pdf", "txt"], accept_multiple_files=True)
     st.divider()#加一条分割线
+    #3清空聊天记录按钮
     if st.button("清空聊天记录"):
         st.session_state.messages = []
         st.rerun()#意思是立即刷新页面，重新运行脚本
-    uploaded_files = st.file_uploader("请选择PDF或TXT文件", type=["pdf", "txt"], accept_multiple_files=True)#允许上传多个文件
     if uploaded_files:
         if st.button("处理这份新文档"):
             full_text = ""
@@ -45,20 +49,19 @@ with st.sidebar:
                     f.write(file.getbuffer())
                 file_text = read_file(file_path)    
             # 读取并切块
-           
                 if file_text:
                      full_text += file_text+"\n\n---\n\n"  # 把新文件添加到总体文件中，添加分隔符，便于后续处理 将数据也就是读取的文字按500字切块，存入向量数据库
                      os.remove(file_path)  # 删除临时保存的文件
             if full_text:#所有文件读取成功后，才进行切块和存入向量数据库
                 st.write(f"当前总字数，共 {len(full_text)} 字。")
-                chunks = [full_text[i:i+500] for i in range(0, len(full_text), 500)]
+                chunks = [full_text[i:i+chunk_size] for i in range(0, len(full_text), chunk_size)]
                 st.write(f"正在处理文档，共 {len(chunks)} 块...")
                 for i in range(0, len(chunks), 10):
                     batch = chunks[i:i+10]
                     emb_list = sf_client.embeddings.create(model="BAAI/bge-m3", input=batch).data
                     for j,emb_data in enumerate(emb_list):
                         collection.add(ids=[f"chunk_{i+j}"], embeddings=[emb_data.embedding], documents=[batch[j]])
-                st.success(f"处理完成！共合并 {len(chunks)} 个文件，切成了 {len(chunks)} 块。")
+                st.success(f"处理完成！共合并 {len(uploaded_files)} 个文件，切成了 {len(chunks)} 块。")
             else:
                 st.error("读取文件失败，请检查文件格式或内容。")
 # 主界面：聊天窗口
