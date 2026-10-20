@@ -47,11 +47,15 @@ with st.sidebar:
                 file_path = f"uploaded_file{ext}"
                 with open(file_path, "wb") as f:  
                     f.write(file.getbuffer())
-                file_text = read_file(file_path)    
-            # 读取并切块
+                try:
+                    file_text = read_file(file_path)
+                except Exception as e:
+                    st.error(f"文件处理出错啦喵！：{e}")
+                    file_text = ""
+                # 读取并切块
                 if file_text:
-                     full_text += file_text+"\n\n---\n\n"  # 把新文件添加到总体文件中，添加分隔符，便于后续处理 将数据也就是读取的文字按500字切块，存入向量数据库
-                     os.remove(file_path)  # 删除临时保存的文件
+                    full_text += file_text + "\n\n---\n\n"  # 合并文件内容并添加分隔符
+                    os.remove(file_path)  # 删除临时保存的文件
             if full_text:#所有文件读取成功后，才进行切块和存入向量数据库
                 st.write(f"当前总字数，共 {len(full_text)} 字。")
                 chunks = [full_text[i:i+chunk_size] for i in range(0, len(full_text), chunk_size)]
@@ -63,7 +67,7 @@ with st.sidebar:
                         collection.add(ids=[f"chunk_{i+j}"], embeddings=[emb_data.embedding], documents=[batch[j]])
                 st.success(f"处理完成！共合并 {len(uploaded_files)} 个文件，切成了 {len(chunks)} 块。")
             else:
-                st.error("读取文件失败，请检查文件格式或内容。")
+                st.error("您上传的文件里没有文字(可能是空文件或图片),请换一个有内容的文件喵！")
 # 主界面：聊天窗口
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -98,4 +102,8 @@ if prompt := st.chat_input("针对文档提问..."):
             )
             answer = response.choices[0].message.content
             st.markdown(answer)
-            st.session_state.messages.append({"role": "assistant", "content": answer})
+            with st.expander("查看检索到的原文片段"):
+                for i, doc in enumerate(results['documents'][0]):
+                    st.markdown(f"片段 {i+1}:\n\n")
+                    st.write(doc)
+                    st.write("---")
