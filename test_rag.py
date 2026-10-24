@@ -11,8 +11,9 @@ chroma_client = chromadb.PersistentClient(path="./my_vector_db_cli")
 collection = chroma_client.get_or_create_collection(name="cli_knowledge")
 
 def process_file(file_path):
+    #文件处理流水线，读-切-打指纹-入库。
     print(f"正在处理文件: {file_path} ...")
-    full_text = read_file(file_path)
+    full_text = read_file(file_path)#读
     if not full_text:
         print("文件内容为空，处理失败。")
         return
@@ -38,20 +39,22 @@ def process_file(file_path):
     print("✅ 文件处理完成，已存入数据库！\n")
 
 def ask_question(prompt):
+   
     # 向量化问题
     question_emb = sf_client.embeddings.create(model="BAAI/bge-m3", input=prompt).data[0].embedding
     # 检索
-    results = collection.query(query_embeddings=[question_emb], n_results=2)
+    results = collection.query(query_embeddings=[question_emb], n_results=2)#去数据库里找最相似片段
     
     if not results['documents'] or not results['documents'][0]:
         return "数据库里没有内容，请先处理文件。"
 
     context = "\n\n---\n\n".join(results['documents'][0])
 
-    # 生成回答
+    # 生成回答，把问题和片段发给大模型生成回答
     response = ds_client.chat.completions.create(
         model="deepseek-chat",
         messages=[
+            #Chat Completions API 规范。
             {"role": "system", "content": "你是文档助手。请严格根据提供的文档片段回答问题。"},
             {"role": "user", "content": f"文档片段：\n{context}\n\n问题：{prompt}"}
         ]
@@ -61,6 +64,7 @@ def ask_question(prompt):
 # ================= 纯终端交互区 =================
 if __name__ == "__main__":
     # 先处理一下文件（你可以改成你文件夹里的文件名）
+    #负责接收用户输入和调度的主程序
     process_file("test.pdf") 
 
     print("🤖 AI助手已上线！输入问题开始对话（输入 '退出' 结束）：")
