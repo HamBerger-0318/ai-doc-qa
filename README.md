@@ -16,3 +16,7 @@ graph TD
     H --> I[拼接历史记录 History]
     I --> J[调用 DeepSeek API: 生成回答]
     J --> K[网页端显示答案]
+##学习笔记
+**API**本质类似自来水厂，前后端分别负责request和response
+**本地服务** ：使用python自带的HTTP.server或手写底层代码，能在本地（localhost）启动一个服务，通过端口（8000）供浏览器访问
+**数据交互**：网络数据传输通常使用json格式，后端将数据打包成json格式返回给前端
