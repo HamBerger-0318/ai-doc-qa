@@ -1,0 +1,6 @@
+streamlit
+openai
+pypdf
+chromadb
+uvicorn
+fastapi
