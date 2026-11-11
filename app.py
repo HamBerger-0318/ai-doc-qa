@@ -1,16 +1,18 @@
-import streamlit as st#python前端书写工具
+import streamlit as st #python前端书写工具
 import os
+import requests # 👈 补上这个！没它你发不了请求
 from openai import OpenAI
 from pypdf import PdfReader
-import chromadb#导入一个向量数据库的包
-from my_tools import read_file#导入自定义的读取文件的函数
+import chromadb #导入一个向量数据库的包
+from my_tools import read_file #导入自定义的读取文件的函数
+
 # 页面设置
 st.set_page_config(page_title="我的AI文档助手", page_icon="📚")
 st.title("📚 我的AI文档助手")
 
 # ================= 配置你的两把钥匙 =================
-DEEPSEEK_KEY = os.getenv("DEEPSEEK_KEY")  # 从环境变量中获取DeepSeek API Key
-SILICONFLOW_KEY = os.getenv("SILICONFLOW_KEY")  # 从环境变量中获取SiliconFlow API Key
+DEEPSEEK_KEY = os.getenv("DEEPSEEK_KEY")  
+SILICONFLOW_KEY = os.getenv("SILICONFLOW_KEY")  
 # ===================================================
 
 # 初始化客户端
@@ -25,9 +27,9 @@ collection = chroma_client.get_or_create_collection(name="pdf_knowledge")
 with st.sidebar:
     st.header("上传文档")
     #1滑块组件
-    chunk_size =st.slider("选择文本切块大小", min_value=100, max_value=1000, value=500, step=50)
+    chunk_size = st.slider("选择文本切块大小", min_value=100, max_value=1000, value=500, step=50)
     #2多文件上传组件
-    uploaded_files =st.file_uploader("请选择PDF或TXT文件", type=["pdf", "txt"], accept_multiple_files=True)
+    uploaded_files = st.file_uploader("请选择PDF或TXT文件", type=["pdf", "txt"], accept_multiple_files=True)
     st.divider()#加一条分割线
     #3清空聊天记录按钮
     if st.button("清空聊天记录"):
@@ -68,6 +70,7 @@ with st.sidebar:
                 st.success(f"处理完成！共合并 {len(uploaded_files)} 个文件，切成了 {len(chunks)} 块。")
             else:
                 st.error("您上传的文件里没有文字(可能是空文件或图片),请换一个有内容的文件喵！")
+                
 # 主界面：聊天窗口
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -87,21 +90,31 @@ if prompt := st.chat_input("针对文档提问..."):
         if collection.count() == 0:
             st.write("数据库为空，请先在左侧上传PDF哦！")
         else:
-            # 搜索相关段落
+            # 搜索相关段落 (前端依然保留搜索逻辑，用于下面展示溯源)
             question_emb = sf_client.embeddings.create(model="BAAI/bge-m3", input=prompt).data[0].embedding
             results = collection.query(query_embeddings=[question_emb], n_results=2)
-            context = "\n\n---\n\n".join(results['documents'][0])
             
-            # 生成回答
-            response = ds_client.chat.completions.create(
-                model="deepseek-chat",
-                messages=[
-                    {"role": "system", "content": "你是文档助手。请严格根据提供的文档片段回答问题。"},
-                    {"role": "user", "content": f"文档片段：\n{context}\n\n问题：{prompt}"}
-                ]
-            )
-            answer = response.choices[0].message.content
-            st.markdown(answer)
+            # 👇 这里就是真正的“前后端分离”调用！
+            # 前端不再直接调DeepSeek，而是把问题打包发给Docker里跑着的FastAPI
+            try:
+                response = requests.post(
+                    "https://64ab879b.r27.cpolar.top/ask",
+                    json={"question": prompt}
+                    timeout=30
+                )
+                
+                # 检查后端是不是正常回复了(状态码200)
+                if response.status_code == 200: 
+                    answer = response.json()["answer"]
+                    st.markdown(answer)
+                else:
+                    st.error(f"后端报错了，状态码：{response.status_code}")
+                    
+            except requests.exceptions.ConnectionError:
+                st.error("❌ 连接后端失败！请检查你的 Docker 容器（my-backend）是否正在运行！")
+                answer = "后端连接失败"
+            
+            # 展示检索到的原文片段
             with st.expander("查看检索到的原文片段"):
                 for i, doc in enumerate(results['documents'][0]):
                     st.markdown(f"片段 {i+1}:\n\n")
