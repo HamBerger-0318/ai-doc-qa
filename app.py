@@ -99,7 +99,7 @@ if prompt := st.chat_input("针对文档提问..."):
             try:
                 response = requests.post(
                     "https://64ab879b.r27.cpolar.top/ask",
-                    json={"question": prompt}
+                    json={"question": prompt},
                     timeout=30
                 )
                 
