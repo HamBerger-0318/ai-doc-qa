@@ -52,9 +52,10 @@ with st.sidebar:
                 except Exception as e:
                     st.error(f"文件处理出错啦喵！：{e}")
                     file_text = ""
+                    
                 if file_text:
                     full_text += file_text + "\n\n---\n\n"  
-                    os.remove(file_path)  
+                   # os.remove(file_path)  
                     
             if full_text:
                 st.write(f"当前总字数，共 {len(full_text)} 字。")
