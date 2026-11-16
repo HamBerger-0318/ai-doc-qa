@@ -1,10 +1,10 @@
-import streamlit as st #python前端书写工具
+import streamlit as st
 import os
-import requests # 👈 补上这个！没它你发不了请求
+import requests
 from openai import OpenAI
 from pypdf import PdfReader
-import chromadb #导入一个向量数据库的包
-from my_tools import read_file #导入自定义的读取文件的函数
+import chromadb
+from my_tools import read_file
 
 # 页面设置
 st.set_page_config(page_title="我的AI文档助手", page_icon="📚")
@@ -17,7 +17,6 @@ SILICONFLOW_KEY = os.getenv("SILICONFLOW_KEY")
 
 # 初始化客户端
 sf_client = OpenAI(api_key=SILICONFLOW_KEY, base_url="https://api.siliconflow.cn/v1")
-ds_client = OpenAI(api_key=DEEPSEEK_KEY, base_url="https://api.deepseek.com")
 
 # 设置数据库
 chroma_client = chromadb.PersistentClient(path="./my_vector_db")
@@ -26,15 +25,14 @@ collection = chroma_client.get_or_create_collection(name="pdf_knowledge")
 # 侧边栏：上传PDF
 with st.sidebar:
     st.header("上传文档")
-    #1滑块组件
     chunk_size = st.slider("选择文本切块大小", min_value=100, max_value=1000, value=500, step=50)
-    #2多文件上传组件
     uploaded_files = st.file_uploader("请选择PDF或TXT文件", type=["pdf", "txt"], accept_multiple_files=True)
-    st.divider()#加一条分割线
-    #3清空聊天记录按钮
+    st.divider()
+    
     if st.button("清空聊天记录"):
         st.session_state.messages = []
-        st.rerun()#意思是立即刷新页面，重新运行脚本
+        st.rerun()
+        
     if uploaded_files:
         if st.button("处理这份新文档"):
             full_text = ""
@@ -43,9 +41,9 @@ with st.sidebar:
             except Exception:
                 pass
             collection = chroma_client.get_or_create_collection(name="pdf_knowledge")
-            for file in uploaded_files:#挨个处理每个上传的文件
-                ext=os.path.splitext(file.name)[1]
-                # 保存上传的文件    
+            
+            for file in uploaded_files:
+                ext = os.path.splitext(file.name)[1]
                 file_path = f"uploaded_file{ext}"
                 with open(file_path, "wb") as f:  
                     f.write(file.getbuffer())
@@ -54,11 +52,11 @@ with st.sidebar:
                 except Exception as e:
                     st.error(f"文件处理出错啦喵！：{e}")
                     file_text = ""
-                # 读取并切块
                 if file_text:
-                    full_text += file_text + "\n\n---\n\n"  # 合并文件内容并添加分隔符
-                    os.remove(file_path)  # 删除临时保存的文件
-            if full_text:#所有文件读取成功后，才进行切块和存入向量数据库
+                    full_text += file_text + "\n\n---\n\n"  
+                    os.remove(file_path)  
+                    
+            if full_text:
                 st.write(f"当前总字数，共 {len(full_text)} 字。")
                 chunks = [full_text[i:i+chunk_size] for i in range(0, len(full_text), chunk_size)]
                 st.write(f"正在处理文档，共 {len(chunks)} 块...")
@@ -69,13 +67,12 @@ with st.sidebar:
                         collection.add(ids=[f"chunk_{i+j}"], embeddings=[emb_data.embedding], documents=[batch[j]])
                 st.success(f"处理完成！共合并 {len(uploaded_files)} 个文件，切成了 {len(chunks)} 块。")
             else:
-                st.error("您上传的文件里没有文字(可能是空文件或图片),请换一个有内容的文件喵！")
-                
+                st.error("您上传的文件里没有文字，请换一个有内容的文件喵！")
+
 # 主界面：聊天窗口
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# 显示历史聊天记录
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
@@ -90,33 +87,31 @@ if prompt := st.chat_input("针对文档提问..."):
         if collection.count() == 0:
             st.write("数据库为空，请先在左侧上传PDF哦！")
         else:
-            # 搜索相关段落 (前端依然保留搜索逻辑，用于下面展示溯源)
+            # 1. 前端自己查库，拿到片段
             question_emb = sf_client.embeddings.create(model="BAAI/bge-m3", input=prompt).data[0].embedding
             results = collection.query(query_embeddings=[question_emb], n_results=2)
-            
-            # 👇 这里就是真正的“前后端分离”调用！
-            # 前端不再直接调DeepSeek，而是把问题打包发给Docker里跑着的FastAPI
+            context_snippets = results['documents'][0]
+             
+            # 2. 把问题 + 片段发给后端，只接后端的 answer
             try:
                 response = requests.post(
-                    "https://64ab879b.r27.cpolar.top/ask",
-                    json={"question": prompt},
+                    "http://49376094.r27.cpolar.top/ask",  # 👈 确认是最新的 cpolar 网址
+                    json={"question": prompt, "context": context_snippets},
                     timeout=30
                 )
-                
-                # 检查后端是不是正常回复了(状态码200)
-                if response.status_code == 200: 
-                    answer = response.json()["answer"]
+                if response.status_code == 200:
+                    result = response.json()
+                    answer = result["answer"]
                     st.markdown(answer)
                 else:
                     st.error(f"后端报错了，状态码：{response.status_code}")
-                    
-            except requests.exceptions.ConnectionError:
-                st.error("❌ 连接后端失败！请检查你的 Docker 容器（my-backend）是否正在运行！")
-                answer = "后端连接失败"
+            except Exception as e:
+                st.error(f"❌ 连接后端失败！请检查Docker和cpolar。报错：{e}")
             
-            # 展示检索到的原文片段
-            with st.expander("查看检索到的原文片段"):
-                for i, doc in enumerate(results['documents'][0]):
-                    st.markdown(f"片段 {i+1}:\n\n")
-                    st.write(doc)
-                    st.write("---")
+            # 3. 展示前端自己查到的原文片段
+            if context_snippets:
+                with st.expander("查看检索到的原文片段"):
+                    for i, doc in enumerate(context_snippets): 
+                        st.markdown(f"片段 {i+1}:\n\n")
+                        st.write(doc)
+                        st.write("---")
