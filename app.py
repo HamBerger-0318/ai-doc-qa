@@ -6,14 +6,27 @@ from pypdf import PdfReader
 import chromadb
 from my_tools import read_file
 
+# 本地开发时自动读 .env（装了 python-dotenv 才生效，没装就跳过）
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 # 页面设置
 st.set_page_config(page_title="我的AI文档助手", page_icon="📚")
 st.title("📚 我的AI文档助手")
 
-# ================= 配置你的两把钥匙 =================
-DEEPSEEK_KEY = os.getenv("DEEPSEEK_KEY")  
-SILICONFLOW_KEY = os.getenv("SILICONFLOW_KEY")  
-# ===================================================
+# ===================== 密钥读取 =====================
+# 本地：环境变量 / .env；Streamlit Cloud：secrets。两边都能读到。
+def secret(key):
+    try:
+        return st.secrets[key]
+    except Exception:
+        return os.getenv(key)
+
+SILICONFLOW_KEY = secret("SILICONFLOW_KEY")
+# ====================================================
 
 # 初始化客户端
 sf_client = OpenAI(api_key=SILICONFLOW_KEY, base_url="https://api.siliconflow.cn/v1")
@@ -52,10 +65,9 @@ with st.sidebar:
                 except Exception as e:
                     st.error(f"文件处理出错啦喵！：{e}")
                     file_text = ""
-                    
                 if file_text:
                     full_text += file_text + "\n\n---\n\n"  
-                   # os.remove(file_path)  
+                    os.remove(file_path)  
                     
             if full_text:
                 st.write(f"当前总字数，共 {len(full_text)} 字。")
@@ -96,18 +108,21 @@ if prompt := st.chat_input("针对文档提问..."):
             # 2. 把问题 + 片段发给后端，只接后端的 answer
             try:
                 response = requests.post(
-                    "http://49376094.r27.cpolar.top/ask",  # 👈 确认是最新的 cpolar 网址
+                    f"{secret('BACKEND_URL')}/ask",
                     json={"question": prompt, "context": context_snippets},
+                    headers={"x-token": secret("API_TOKEN")},   # ← 带上暗号，没它后端直接 401
                     timeout=30
                 )
                 if response.status_code == 200:
-                    result = response.json()
-                    answer = result["answer"]
-                    st.markdown(answer)
+                    st.markdown(response.json()["answer"])
+                elif response.status_code == 401:
+                    st.error("暗号不对：前端的 API_TOKEN 和后端不一致。")
+                elif response.status_code == 413:
+                    st.error("内容太长，被后端拦下了。")
                 else:
-                    st.error(f"后端报错了，状态码：{response.status_code}")
+                    st.error(f"后端报错，状态码：{response.status_code}")
             except Exception as e:
-                st.error(f"❌ 连接后端失败！请检查Docker和cpolar。报错：{e}")
+                st.error(f"❌ 连不上后端，检查 Docker 和隧道。报错：{e}")
             
             # 3. 展示前端自己查到的原文片段
             if context_snippets:

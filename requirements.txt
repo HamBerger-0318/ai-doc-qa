@@ -4,3 +4,5 @@ pypdf
 chromadb
 uvicorn
 fastapi
+requests
+python-dotenv
